@@ -127,6 +127,7 @@ shell_export_syntax() {
 # ── Platform / target triple detection ───────────────────────────
 
 detect_target_triple() {
+  [ -n "$TARGET" ] && { echo "$TARGET"; return; }
   local os arch
   os=$(uname -s)
   arch=$(uname -m)
@@ -263,6 +264,8 @@ Options:
   --list-features      Print all available features and exit
   --prefix PATH        Install everything under PATH (default: \$HOME)
                        Sets CARGO_HOME, RUSTUP_HOME, source checkout, config
+  --target TRIPLE      Cross-compilation target triple (e.g. aarch64-unknown-linux-gnu)
+                       Used by both source build (--target) and pre-built download
   --dry-run            Show what would happen without building or installing
   --skip-onboard       Skip the post-install onboarding prompt
   --uninstall          Remove ZeroClaw binary and optionally config/data
@@ -279,6 +282,8 @@ Examples:
   $0 --prefix /tmp/zc-test --skip-onboard      # isolated test install
   $0 --dry-run --prebuilt                      # preview without installing
   $0 --uninstall                               # remove ZeroClaw
+  $0 --prebuilt --target aarch64-unknown-linux-gnu  # download cross-arch binary
+  $0 --source --target aarch64-unknown-linux-gnu    # cross-compile for target
 
 Environment:
   ZEROCLAW_INSTALL_DIR   Source checkout override (default: PREFIX/.zeroclaw/src)
@@ -490,6 +495,7 @@ PREFIX="$HOME"
 INSTALL_MODE=""   # ""=ask, "prebuilt"=force prebuilt, "source"=force source
 PRESET=""         # ""=unset, "minimal"=alias for --minimal, "full"=default-features
 WITH_GATEWAY=""   # ""=unset (preset/feature default applies), "true"/"false"=explicit toggle
+TARGET=""         # cross-compilation target triple (empty=auto-detect)
 
 # Support legacy env var
 if [ -n "${ZEROCLAW_CARGO_FEATURES:-}" ]; then
@@ -526,6 +532,11 @@ while [ $# -gt 0 ]; do
     --skip-onboard)   SKIP_ONBOARD=true ;;
     --prebuilt)       INSTALL_MODE="prebuilt" ;;
     --source)         INSTALL_MODE="source" ;;
+    --target)
+      if [ $# -lt 2 ]; then
+        die "Missing value for --target. Expected: --target aarch64-unknown-linux-gnu"
+      fi
+      shift; TARGET="$1" ;;
     --uninstall)      UNINSTALL=true ;;
     -h|--help)        usage; exit 0 ;;
     -V|--version)
@@ -808,10 +819,13 @@ if [ "$DRY_RUN" = true ]; then
   if [ -n "${CARGO_PROFILE_RELEASE_LTO:-}" ]; then
     info "env:      CARGO_PROFILE_RELEASE_LTO=$CARGO_PROFILE_RELEASE_LTO"
   fi
+  if [ -n "$TARGET" ]; then
+    info "target:   $TARGET"
+  fi
   if [ -n "$CARGO_FLAGS" ]; then
-    info "cargo install --path . --locked --force $CARGO_FLAGS"
+    info "cargo install --path . --locked --force${TARGET:+ --target \"$TARGET\"} $CARGO_FLAGS"
   else
-    info "cargo install --path . --locked --force"
+    info "cargo install --path . --locked --force${TARGET:+ --target \"$TARGET\"}"
   fi
 
   EXPORT_LINE=$(shell_export_syntax)
@@ -835,7 +849,11 @@ fi
 echo
 
 # shellcheck disable=SC2086
-cargo install --path . --locked --force $CARGO_FLAGS
+if [ -n "$TARGET" ]; then
+  cargo install --path . --locked --force --target "$TARGET" $CARGO_FLAGS
+else
+  cargo install --path . --locked --force $CARGO_FLAGS
+fi
 
 # ── Web dashboard (gateway feature only) ──────────────────────────
 # When the install includes the `gateway` feature, build `web/dist` so
