@@ -697,6 +697,16 @@ if [ "$DRY_RUN" != true ]; then
   info "Rust $RUST_VERSION (>= $MSRV)"
 fi
 
+# ── Preflight: cross-compilation target ────────────────────────────
+
+if [ -n "$TARGET" ]; then
+  if [ "$DRY_RUN" = true ]; then
+    warn "[dry-run] Would run: rustup target add $TARGET"
+  else
+    rustup target add "$TARGET" 2>/dev/null || info "rustup target add $TARGET — may need to be run manually"
+  fi
+fi
+
 # ── Preflight: 32-bit ARM ────────────────────────────────────────
 
 case "$(uname -m)" in
