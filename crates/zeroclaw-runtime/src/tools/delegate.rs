@@ -391,7 +391,10 @@ impl DelegateTool {
     }
 
     /// Resolve `model_provider` ("type.alias") → (provider_type, credential, model, temperature).
-    fn resolve_brain(&self, model_provider: &str) -> (String, Option<String>, String, Option<f64>) {
+    fn resolve_brain(
+        &self,
+        model_provider: &str,
+    ) -> (String, Option<String>, String, Option<f64>, Option<String>) {
         if let Some((type_key, alias_key)) = model_provider.split_once('.')
             && let Some(alias_map) = self.providers_models.get(type_key)
             && let Some(cfg) = alias_map.get(alias_key)
@@ -403,6 +406,7 @@ impl DelegateTool {
                     .or_else(|| self.global_credential.clone()),
                 cfg.model.clone().unwrap_or_default(),
                 cfg.temperature,
+                cfg.uri.clone(),
             );
         }
         let type_key = model_provider
@@ -412,6 +416,7 @@ impl DelegateTool {
             type_key.to_string(),
             self.global_credential.clone(),
             String::new(),
+            None,
             None,
         )
     }
@@ -708,7 +713,7 @@ impl DelegateTool {
 
         // Resolve profile references
         let max_depth = self.resolve_max_depth(&agent_config.runtime_profile);
-        let (provider_type, credential, model, temperature) =
+        let (provider_type, credential, model, temperature, uri) =
             self.resolve_brain(&agent_config.model_provider);
         let agentic = self.resolve_agentic(&agent_config.runtime_profile);
 
@@ -745,11 +750,12 @@ impl DelegateTool {
             });
         }
 
-        // Create model_provider for this agent
+        // Create model_provider for this agent, threading the per-alias URI
         let model_provider: Box<dyn ModelProvider> =
-            match zeroclaw_providers::create_model_provider_with_options(
+            match zeroclaw_providers::create_model_provider_with_options_and_url(
                 &provider_type,
                 credential.as_deref(),
+                uri.as_deref(),
                 &self.provider_runtime_options,
             ) {
                 Ok(p) => p,

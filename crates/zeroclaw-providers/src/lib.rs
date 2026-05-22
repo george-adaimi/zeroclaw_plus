@@ -979,6 +979,16 @@ pub fn create_model_provider_with_options(
     create_model_provider_inner(None, name, "default", api_key, None, options)
 }
 
+/// Factory: create model_provider with runtime options AND a per-call custom base URL.
+pub fn create_model_provider_with_options_and_url(
+    name: &str,
+    api_key: Option<&str>,
+    api_url: Option<&str>,
+    options: &ModelProviderRuntimeOptions,
+) -> anyhow::Result<Box<dyn ModelProvider>> {
+    create_model_provider_inner(None, name, "default", api_key, api_url, options)
+}
+
 /// Factory: create model_provider with optional custom base URL.
 ///
 /// Legacy entry point — see [`create_model_provider`].
