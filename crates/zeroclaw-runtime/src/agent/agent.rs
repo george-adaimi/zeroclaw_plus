@@ -861,7 +861,13 @@ impl Agent {
                 &provider_runtime_options,
             )?;
 
-           if agent_cfg.model_provider_fallback.is_empty() {
+           ::zeroclaw_log::record!(
+                DEBUG,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_attrs(::serde_json::json!({"alias": agent_alias, "fallback_count": agent_cfg.model_provider_fallback.len(), "fallbacks": agent_cfg.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
+                    &format!("Agent::from_config: model_provider={}, fallback_count={}", provider_name, agent_cfg.model_provider_fallback.len())
+            );
+            if agent_cfg.model_provider_fallback.is_empty() {
                 primary
             } else {
                 let fallback_names: Vec<String> = agent_cfg

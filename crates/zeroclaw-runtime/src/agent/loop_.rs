@@ -4384,7 +4384,13 @@ pub async fn process_message(
         };
         let provider_runtime_options =
             zeroclaw_providers::provider_runtime_options_from_config(&config);
-        let model_provider: Box<dyn ModelProvider> =
+        let model_provider: Box<dyn ModelProvider> = {
+            ::zeroclaw_log::record!(
+                DEBUG,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_attrs(::serde_json::json!({"alias": agent_alias, "fallback_count": agent.model_provider_fallback.len(), "fallbacks": agent.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
+                    &format!("process_message: model_provider={}, fallback_count={}", provider_name, agent.model_provider_fallback.len())
+            );
             if agent.model_provider_fallback.is_empty() {
                 zeroclaw_providers::create_routed_model_provider_with_options(
                     &config,
@@ -4416,7 +4422,8 @@ pub async fn process_message(
                     &model_name,
                     &provider_runtime_options,
                 )?
-            };
+            }
+        };
 
         let hardware_rag: Option<crate::rag::HardwareRag> = config
             .peripherals
