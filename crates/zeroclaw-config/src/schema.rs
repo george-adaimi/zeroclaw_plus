@@ -13390,6 +13390,7 @@ impl Config {
                 .await
                 .context("Failed to read config file")?;
 
+            eprintln!("[DEBUG] Loading config from {}", config_path.display());
             ::zeroclaw_log::record!(
                 INFO,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
@@ -13428,6 +13429,8 @@ impl Config {
 
             // Debug: dump all agent aliases and their model_provider_fallback
             for (alias, agent) in &config.agents {
+                eprintln!("[DEBUG] Loaded agent '{}': model_provider={}, model_provider_fallback={}",
+                    alias, agent.model_provider, agent.model_provider_fallback.len());
                 ::zeroclaw_log::record!(
                     INFO,
                     ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
