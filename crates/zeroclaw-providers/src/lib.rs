@@ -1484,24 +1484,40 @@ pub fn create_resilient_model_provider_with_fallbacks(
     )?;
 
     // Build fallback providers — also routed so they respect model_routes.
-    // Each fallback resolves its own API key from config (not the primary's key).
+    // Each fallback resolves its own API key and model from its config entry.
     let mut fallback_providers: Vec<(String, Box<dyn ModelProvider>)> = Vec::new();
     for fallback_name in fallback_names {
-        // Resolve the fallback's own API key from its config entry.
-        let fallback_key = fallback_name.split_once('.')
+        // Resolve the fallback's own API key, model, and URI from its config entry.
+        let (fallback_key, fallback_model, fallback_uri) = fallback_name.split_once('.')
             .and_then(|(family, alias)| {
-                config.providers.models.find(family, alias)
-                    .and_then(|e| e.api_key.as_deref())
-            });
+                config.providers.models.find(family, alias).map(|e| {
+                    let key = e.api_key.as_deref().and_then(|k| {
+                        let trimmed = k.trim();
+                        (!trimmed.is_empty()).then_some(trimmed)
+                    });
+                    let model = e.model.as_deref().and_then(|m| {
+                        let trimmed = m.trim();
+                        (!trimmed.is_empty()).then_some(trimmed)
+                    });
+                    let uri = e.uri.as_deref().and_then(|u| {
+                        let trimmed = u.trim();
+                        (!trimmed.is_empty()).then_some(trimmed)
+                    });
+                    (key, model, uri)
+                })
+            })
+            .unwrap_or((None, None, None));
+        let model_to_use = fallback_model.unwrap_or(default_model);
+        let fallback_options = options_for_provider_ref(config, fallback_name, options);
         let fp = create_routed_model_provider_with_options(
             config,
             fallback_name,
             fallback_key,
-            None,
+            fallback_uri,
             reliability,
             &config.model_routes,
-            default_model,
-            options,
+            model_to_use,
+            &fallback_options,
         )?;
         fallback_providers.push((fallback_name.clone(), fp));
     }
