@@ -379,6 +379,9 @@ pub struct ReliableModelProvider {
     key_index: AtomicUsize,
     /// Per-model failover chains. Test-only: model_name → [alt1, alt2, ...].
     model_fallbacks: HashMap<String, Vec<String>>,
+    /// Ordered fallback providers for rate-limit / availability failover.
+    /// Tried after all primary providers/models are exhausted.
+    fallback_providers: Vec<(String, Box<dyn ModelProvider>)>,
 }
 
 impl ReliableModelProvider {
@@ -396,6 +399,7 @@ impl ReliableModelProvider {
             api_keys: Vec::new(),
             key_index: AtomicUsize::new(0),
             model_fallbacks: HashMap::new(),
+            fallback_providers: Vec::new(),
         }
     }
     /// Set additional API keys for round-robin rotation on rate-limit errors.
@@ -409,6 +413,16 @@ impl ReliableModelProvider {
     #[cfg(test)]
     pub fn with_model_fallbacks(mut self, fallbacks: HashMap<String, Vec<String>>) -> Self {
         self.model_fallbacks = fallbacks;
+        self
+    }
+
+    /// Install ordered fallback providers for rate-limit / availability failover.
+    /// These are tried after all primary providers and model fallbacks are exhausted.
+    pub fn with_provider_fallbacks(
+        mut self,
+        fallbacks: Vec<(String, Box<dyn ModelProvider>)>,
+    ) -> Self {
+        self.fallback_providers = fallbacks;
         self
     }
 
@@ -578,8 +592,60 @@ impl ModelProvider for ReliableModelProvider {
             }
         }
 
+        // Try fallback providers (primary + model fallbacks exhausted).
+        for (fallback_name, fallback_mp) in &self.fallback_providers {
+            let mut backoff_ms = self.base_backoff_ms;
+
+            for attempt in 0..=self.max_retries {
+                match fallback_mp
+                    .chat_with_system(system_prompt, message, model, temperature)
+                    .await
+                {
+                    Ok(resp) => {
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt})), "Fallback model_provider recovered");
+                        let primary = self
+                            .model_providers
+                            .first()
+                            .map(|(n, _)| n.as_str())
+                            .unwrap_or("");
+                        record_provider_fallback(primary, model, fallback_name, model);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        let error_detail = compact_error_detail(&e);
+                        push_failure(
+                            &mut failures,
+                            fallback_name,
+                            model,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            "error",
+                            &error_detail,
+                        );
+
+                        if attempt < self.max_retries {
+                            let wait = self.compute_backoff(backoff_ms, &e);
+                            ::zeroclaw_log::record!(WARN, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_outcome(::zeroclaw_log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt + 1, "backoff_ms": wait, "error": error_detail})), "Fallback model_provider call failed, retrying");
+                            tokio::time::sleep(Duration::from_millis(wait)).await;
+                            backoff_ms = (backoff_ms.saturating_mul(2)).min(10_000);
+                        }
+                    }
+                }
+            }
+
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown)
+                    .with_attrs(
+                        ::serde_json::json!({"model_provider": fallback_name, "model": model})
+                    ),
+                "Fallback model_provider exhausted retries, trying next fallback"
+            );
+        }
+
         anyhow::bail!(
-            "All model_providers/models failed. Attempts:\n{}",
+            "All model_providers/models/fallbacks failed. Attempts:\n{}",
             failures.join("\n")
         )
     }
@@ -700,8 +766,60 @@ impl ModelProvider for ReliableModelProvider {
             }
         }
 
+        // Try fallback providers (primary + model fallbacks exhausted).
+        for (fallback_name, fallback_mp) in &self.fallback_providers {
+            let mut backoff_ms = self.base_backoff_ms;
+
+            for attempt in 0..=self.max_retries {
+                match fallback_mp
+                    .chat_with_history(&effective_messages, model, temperature)
+                    .await
+                {
+                    Ok(resp) => {
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt})), "Fallback model_provider recovered");
+                        let primary = self
+                            .model_providers
+                            .first()
+                            .map(|(n, _)| n.as_str())
+                            .unwrap_or("");
+                        record_provider_fallback(primary, model, fallback_name, model);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        let error_detail = compact_error_detail(&e);
+                        push_failure(
+                            &mut failures,
+                            fallback_name,
+                            model,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            "error",
+                            &error_detail,
+                        );
+
+                        if attempt < self.max_retries {
+                            let wait = self.compute_backoff(backoff_ms, &e);
+                            ::zeroclaw_log::record!(WARN, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_outcome(::zeroclaw_log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt + 1, "backoff_ms": wait, "error": error_detail})), "Fallback model_provider call failed, retrying");
+                            tokio::time::sleep(Duration::from_millis(wait)).await;
+                            backoff_ms = (backoff_ms.saturating_mul(2)).min(10_000);
+                        }
+                    }
+                }
+            }
+
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown)
+                    .with_attrs(
+                        ::serde_json::json!({"model_provider": fallback_name, "model": model})
+                    ),
+                "Fallback model_provider exhausted retries, trying next fallback"
+            );
+        }
+
         anyhow::bail!(
-            "All model_providers/models failed. Attempts:\n{}",
+            "All model_providers/models/fallbacks failed. Attempts:\n{}",
             failures.join("\n")
         )
     }
@@ -710,6 +828,11 @@ impl ModelProvider for ReliableModelProvider {
         self.model_providers
             .first()
             .map(|(_, p)| p.supports_native_tools())
+            .or_else(|| {
+                self.fallback_providers
+                    .first()
+                    .map(|(_, p)| p.supports_native_tools())
+            })
             .unwrap_or(false)
     }
 
@@ -717,6 +840,11 @@ impl ModelProvider for ReliableModelProvider {
         self.model_providers
             .first()
             .map(|(_, p)| p.supports_vision())
+            .or_else(|| {
+                self.fallback_providers
+                    .first()
+                    .map(|(_, p)| p.supports_vision())
+            })
             .unwrap_or(false)
     }
 
@@ -837,8 +965,61 @@ impl ModelProvider for ReliableModelProvider {
             }
         }
 
+        // Try fallback providers (primary + model fallbacks exhausted).
+        // Each fallback gets its own full retry cycle.
+        for (fallback_name, fallback_mp) in &self.fallback_providers {
+            let mut backoff_ms = self.base_backoff_ms;
+
+            for attempt in 0..=self.max_retries {
+                match fallback_mp
+                    .chat_with_tools(&effective_messages, tools, model, temperature)
+                    .await
+                {
+                    Ok(resp) => {
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt})), "Fallback model_provider recovered");
+                        let primary = self
+                            .model_providers
+                            .first()
+                            .map(|(n, _)| n.as_str())
+                            .unwrap_or("");
+                        record_provider_fallback(primary, model, fallback_name, model);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        let error_detail = compact_error_detail(&e);
+                        push_failure(
+                            &mut failures,
+                            fallback_name,
+                            model,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            "error",
+                            &error_detail,
+                        );
+
+                        if attempt < self.max_retries {
+                            let wait = self.compute_backoff(backoff_ms, &e);
+                            ::zeroclaw_log::record!(WARN, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_outcome(::zeroclaw_log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt + 1, "backoff_ms": wait, "error": error_detail})), "Fallback model_provider call failed, retrying");
+                            tokio::time::sleep(Duration::from_millis(wait)).await;
+                            backoff_ms = (backoff_ms.saturating_mul(2)).min(10_000);
+                        }
+                    }
+                }
+            }
+
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown)
+                    .with_attrs(
+                        ::serde_json::json!({"model_provider": fallback_name, "model": model})
+                    ),
+                "Fallback model_provider exhausted retries, trying next fallback"
+            );
+        }
+
         anyhow::bail!(
-            "All model_providers/models failed. Attempts:\n{}",
+            "All model_providers/models/fallbacks failed. Attempts:\n{}",
             failures.join("\n")
         )
     }
@@ -964,8 +1145,62 @@ impl ModelProvider for ReliableModelProvider {
             }
         }
 
+        // Try fallback providers (primary + model fallbacks exhausted).
+        // Each fallback gets its own full retry cycle.
+        for (fallback_name, fallback_mp) in &self.fallback_providers {
+            let mut backoff_ms = self.base_backoff_ms;
+
+            for attempt in 0..=self.max_retries {
+                let req = ChatRequest {
+                    messages: &effective_messages,
+                    tools: request.tools,
+                };
+                match fallback_mp.chat(req, model, temperature).await {
+                    Ok(resp) => {
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt})), "Fallback model_provider recovered");
+                        let primary = self
+                            .model_providers
+                            .first()
+                            .map(|(n, _)| n.as_str())
+                            .unwrap_or("");
+                        record_provider_fallback(primary, model, fallback_name, model);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        let error_detail = compact_error_detail(&e);
+                        push_failure(
+                            &mut failures,
+                            fallback_name,
+                            model,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            "error",
+                            &error_detail,
+                        );
+
+                        if attempt < self.max_retries {
+                            let wait = self.compute_backoff(backoff_ms, &e);
+                            ::zeroclaw_log::record!(WARN, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_outcome(::zeroclaw_log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": model, "attempt": attempt + 1, "backoff_ms": wait, "error": error_detail})), "Fallback model_provider call failed, retrying");
+                            tokio::time::sleep(Duration::from_millis(wait)).await;
+                            backoff_ms = (backoff_ms.saturating_mul(2)).min(10_000);
+                        }
+                    }
+                }
+            }
+
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown)
+                    .with_attrs(
+                        ::serde_json::json!({"model_provider": fallback_name, "model": model})
+                    ),
+                "Fallback model_provider exhausted retries, trying next fallback"
+            );
+        }
+
         anyhow::bail!(
-            "All model_providers/models failed. Attempts:\n{}",
+            "All model_providers/models/fallbacks failed. Attempts:\n{}",
             failures.join("\n")
         )
     }
@@ -974,12 +1209,20 @@ impl ModelProvider for ReliableModelProvider {
         self.model_providers
             .iter()
             .any(|(_, p)| p.supports_streaming())
+            || self
+                .fallback_providers
+                .iter()
+                .any(|(_, p)| p.supports_streaming())
     }
 
     fn supports_streaming_tool_events(&self) -> bool {
         self.model_providers
             .iter()
             .any(|(_, p)| p.supports_streaming_tool_events())
+            || self
+                .fallback_providers
+                .iter()
+                .any(|(_, p)| p.supports_streaming_tool_events())
     }
 
     fn stream_chat(
@@ -1400,7 +1643,7 @@ mod tests {
             .await
             .expect_err("all model_providers should fail");
         let msg = err.to_string();
-        assert!(msg.contains("All model_providers/models failed"));
+        assert!(msg.contains("All model_providers/models/fallbacks failed"));
         assert!(msg.contains("model_provider=p1 model=test"));
         assert!(msg.contains("model_provider=p2 model=test"));
         assert!(msg.contains("error=p1 error"));
@@ -1704,7 +1947,7 @@ mod tests {
             .expect_err("all models should fail");
         assert!(
             err.to_string()
-                .contains("All model_providers/models failed")
+                .contains("All model_providers/models/fallbacks failed")
         );
 
         let seen = mock.models_seen.lock();
@@ -2231,7 +2474,7 @@ mod tests {
             .await
             .expect_err("all model_providers should fail");
         let msg = err.to_string();
-        assert!(msg.contains("All model_providers/models failed"));
+        assert!(msg.contains("All model_providers/models/fallbacks failed"));
         assert!(msg.contains("model_provider=p1 model=test"));
         assert!(msg.contains("model_provider=p2 model=test"));
         assert!(msg.contains("error=p1 chat error"));

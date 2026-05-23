@@ -2736,6 +2736,13 @@ pub struct AliasedAgentConfig {
     /// `Config::validate()` fails loud on dangling references.
     #[serde(default)]
     pub model_provider: crate::providers::ModelProviderRef,
+    /// Ordered fallback chain for rate-limit / availability failover.
+    /// Each entry is a dotted model-provider alias (e.g. `"anthropic.main"`,
+    /// `"openrouter.claude"`). When the primary provider exhausts all retries,
+    /// the agent tries each fallback in order until one succeeds or the chain
+    /// is exhausted. Default: `[]`.
+    #[serde(default)]
+    pub model_provider_fallback: Vec<crate::providers::ModelProviderRef>,
     /// Risk profile alias (e.g. `"default"`). Resolves delegation guardrails at runtime.
     #[serde(default)]
     pub risk_profile: String,
@@ -2901,6 +2908,7 @@ impl Default for AliasedAgentConfig {
             enabled: true,
             channels: Vec::new(),
             model_provider: crate::providers::ModelProviderRef::default(),
+            model_provider_fallback: Vec::new(),
             risk_profile: String::new(),
             runtime_profile: String::new(),
             skill_bundles: Vec::new(),

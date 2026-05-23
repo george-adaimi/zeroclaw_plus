@@ -848,8 +848,8 @@ impl Agent {
         let provider_runtime_options =
             zeroclaw_providers::provider_runtime_options_from_config(config);
 
-        let model_provider: Box<dyn ModelProvider> =
-            zeroclaw_providers::create_routed_model_provider_with_options(
+        let model_provider: Box<dyn ModelProvider> = {
+            let primary = zeroclaw_providers::create_routed_model_provider_with_options(
                 config,
                 provider_name,
                 agent_model_provider.and_then(|e| e.api_key.as_deref()),
@@ -859,6 +859,27 @@ impl Agent {
                 &model_name,
                 &provider_runtime_options,
             )?;
+
+            if agent_cfg.model_provider_fallback.is_empty() {
+                primary
+            } else {
+                let fallback_names: Vec<String> = agent_cfg
+                    .model_provider_fallback
+                    .iter()
+                    .map(|r| r.to_string())
+                    .collect();
+                zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
+                    config,
+                    provider_name,
+                    agent_model_provider.and_then(|e| e.api_key.as_deref()),
+                    agent_model_provider.and_then(|e| e.uri.as_deref()),
+                    &config.reliability,
+                    &fallback_names,
+                    &model_name,
+                    &provider_runtime_options,
+                )?
+            }
+        };
 
         let dispatcher_choice = agent_cfg.tool_dispatcher.as_str();
         let tool_dispatcher: Box<dyn ToolDispatcher> = match dispatcher_choice {

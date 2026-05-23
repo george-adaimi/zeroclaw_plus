@@ -86,6 +86,9 @@ impl HasPropKind for crate::providers::ChannelRef {
 impl HasPropKind for Vec<crate::providers::ChannelRef> {
     const PROP_KIND: PropKind = PropKind::StringArray;
 }
+impl HasPropKind for Vec<crate::providers::ModelProviderRef> {
+    const PROP_KIND: PropKind = PropKind::StringArray;
+}
 
 // Multi-agent typed primitives. AgentAlias / PeerGroupName /
 // PeerUsername round-trip as plain strings; AccessMode and

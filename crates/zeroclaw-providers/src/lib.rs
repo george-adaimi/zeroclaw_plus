@@ -1154,7 +1154,7 @@ fn is_legacy_kimi_code_alias(name: &str) -> bool {
 
 /// Factory: create model_provider with optional base URL and runtime options.
 #[allow(clippy::too_many_lines)]
-fn create_model_provider_inner(
+pub(crate) fn create_model_provider_inner(
     config: Option<&zeroclaw_config::schema::Config>,
     raw_name: &str,
     alias: &str,
@@ -1453,6 +1453,62 @@ pub fn create_routed_model_provider_with_options(
         routes,
         default_model.to_string(),
     )))
+}
+
+/// Build a resilient model provider with ordered fallback providers for
+/// rate-limit / availability failover.
+///
+/// The primary provider is wrapped in a `ReliableModelProvider`. Each fallback
+/// is independently created and added as a fallback. When the primary provider
+/// exhausts all retries, the agent tries each fallback in order.
+pub fn create_resilient_model_provider_with_fallbacks(
+    config: &zeroclaw_config::schema::Config,
+    primary_name: &str,
+    api_key: Option<&str>,
+    api_url: Option<&str>,
+    reliability: &zeroclaw_config::schema::ReliabilityConfig,
+    fallback_names: &[String],
+    _default_model: &str,
+    options: &ModelProviderRuntimeOptions,
+) -> anyhow::Result<Box<dyn ModelProvider>> {
+    // Build the ReliableModelProvider with primary + fallback providers.
+    // Since create_resilient_model_provider_from_ref returns Box<dyn ModelProvider>,
+    // we reconstruct directly using create_model_provider_inner.
+    let primary_inner = create_model_provider_inner(
+        Some(config),
+        primary_name,
+        "default",
+        api_key,
+        api_url,
+        options,
+    )?;
+
+    let all_providers: Vec<(String, Box<dyn ModelProvider>)> =
+        vec![(primary_name.to_string(), primary_inner)];
+
+    let mut fallback_providers: Vec<(String, Box<dyn ModelProvider>)> = Vec::new();
+    for fallback_name in fallback_names {
+        let fp = create_model_provider_inner(
+            Some(config),
+            fallback_name,
+            "default",
+            api_key,
+            None, // api_url is only for the primary
+            options,
+        )?;
+        fallback_providers.push((fallback_name.clone(), fp));
+    }
+
+    let reliable = ReliableModelProvider::new(
+        primary_name,
+        all_providers,
+        reliability.provider_retries,
+        reliability.provider_backoff_ms,
+    )
+    .with_api_keys(reliability.api_keys.clone())
+    .with_provider_fallbacks(fallback_providers);
+
+    Ok(Box::new(reliable))
 }
 
 /// Information about a supported model model_provider for display purposes.
