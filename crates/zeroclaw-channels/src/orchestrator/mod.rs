@@ -1092,14 +1092,33 @@ async fn maybe_apply_runtime_config_update(ctx: &ChannelRuntimeContext) -> Resul
         &next_defaults.default_model_provider,
         &ctx.provider_runtime_options,
     );
-    let next_default_model_provider = zeroclaw_providers::create_resilient_model_provider_from_ref(
-        &next_config,
-        &next_defaults.default_model_provider,
-        next_defaults.api_key.as_deref(),
-        next_defaults.api_url.as_deref(),
-        &next_defaults.reliability,
-        &next_options,
-    )?;
+    let fallback_names: Vec<String> = ctx
+        .agent_cfg
+        .model_provider_fallback
+        .iter()
+        .map(|r| r.to_string())
+        .collect();
+    let next_default_model_provider = if fallback_names.is_empty() {
+        zeroclaw_providers::create_resilient_model_provider_from_ref(
+            &next_config,
+            &next_defaults.default_model_provider,
+            next_defaults.api_key.as_deref(),
+            next_defaults.api_url.as_deref(),
+            &next_defaults.reliability,
+            &next_options,
+        )?
+    } else {
+        zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
+            &next_config,
+            &next_defaults.default_model_provider,
+            next_defaults.api_key.as_deref(),
+            next_defaults.api_url.as_deref(),
+            &next_defaults.reliability,
+            &fallback_names,
+            &next_defaults.model,
+            &next_options,
+        )?
+    };
     let next_default_model_provider: Arc<dyn ModelProvider> =
         Arc::from(next_default_model_provider);
 
@@ -1606,6 +1625,11 @@ async fn get_or_create_provider(
         api_url.map(ToString::to_string),
         ctx.reliability.as_ref().clone(),
         ctx.provider_runtime_options.clone(),
+        {
+            let fb: Vec<String> = ctx.agent_cfg.model_provider_fallback.iter().map(|r| r.to_string()).collect();
+            if fb.is_empty() { None } else { Some(fb) }
+        },
+        &defaults.model,
     )
     .await?;
     let model_provider: Arc<dyn ModelProvider> = Arc::from(model_provider);
@@ -1636,22 +1660,50 @@ async fn create_resilient_model_provider_nonblocking(
     api_url: Option<String>,
     reliability: zeroclaw_config::schema::ReliabilityConfig,
     provider_runtime_options: zeroclaw_providers::ModelProviderRuntimeOptions,
+    fallback_names: Option<Vec<String>>,
+    default_model: &str,
 ) -> anyhow::Result<Box<dyn ModelProvider>> {
     let provider_name = provider_name.to_string();
+    let fallback_names = fallback_names.map(|v| v.to_vec());
+    let default_model = default_model.to_string();
     tokio::task::spawn_blocking(move || {
         let options = zeroclaw_providers::options_for_provider_ref(
             &config,
             &provider_name,
             &provider_runtime_options,
         );
-        zeroclaw_providers::create_resilient_model_provider_from_ref(
-            &config,
-            &provider_name,
-            api_key.as_deref(),
-            api_url.as_deref(),
-            &reliability,
-            &options,
-        )
+        if let Some(ref fallbacks) = fallback_names {
+            if fallbacks.is_empty() {
+                zeroclaw_providers::create_resilient_model_provider_from_ref(
+                    &config,
+                    &provider_name,
+                    api_key.as_deref(),
+                    api_url.as_deref(),
+                    &reliability,
+                    &options,
+                )
+            } else {
+                zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
+                    &config,
+                    &provider_name,
+                    api_key.as_deref(),
+                    api_url.as_deref(),
+                    &reliability,
+                    fallbacks,
+                    &default_model,
+                    &options,
+                )
+            }
+        } else {
+            zeroclaw_providers::create_resilient_model_provider_from_ref(
+                &config,
+                &provider_name,
+                api_key.as_deref(),
+                api_url.as_deref(),
+                &reliability,
+                &options,
+            )
+        }
     })
     .await
     .context("failed to join model_provider initialization task")?
@@ -3894,6 +3946,11 @@ async fn process_channel_message_body(
                     ctx.api_url.clone(),
                     ctx.reliability.as_ref().clone(),
                     ctx.provider_runtime_options.clone(),
+                    {
+            let fb: Vec<String> = ctx.agent_cfg.model_provider_fallback.iter().map(|r| r.to_string()).collect();
+            if fb.is_empty() { None } else { Some(fb) }
+        },
+                    &new_model,
                 )
                 .await
                 {
@@ -6811,6 +6868,11 @@ pub async fn start_channels(
             .unwrap_or_else(|| resolved_default_provider(&config));
         let provider_runtime_options =
             zeroclaw_providers::provider_runtime_options_for_agent(&config, agent_alias);
+        let default_model = agent_provider_entry
+            .and_then(|e| e.model.as_deref())
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(|| "unknown");
         let model_provider: Arc<dyn ModelProvider> = Arc::from(
             create_resilient_model_provider_nonblocking(
                 Arc::new(config.clone()),
@@ -6819,6 +6881,11 @@ pub async fn start_channels(
                 agent_provider_entry.and_then(|e| e.uri.clone()),
                 config.reliability.clone(),
                 provider_runtime_options.clone(),
+                {
+                    let fb: Vec<String> = agent.model_provider_fallback.iter().map(|r| r.to_string()).collect();
+                    if fb.is_empty() { None } else { Some(fb) }
+                },
+                default_model,
             )
             .await?,
         );
