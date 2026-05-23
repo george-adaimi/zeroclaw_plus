@@ -593,6 +593,26 @@ impl ModelProvider for ReliableModelProvider {
         }
 
         // Try fallback providers (primary + model fallbacks exhausted).
+        if self.fallback_providers.is_empty() {
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                "Primary exhausted, no fallback providers configured"
+            );
+        } else {
+            let names: Vec<&str> = self
+                .fallback_providers
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect();
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                format!("Primary exhausted, trying fallback providers: {}", names.join(", "))
+            );
+        }
         for (fallback_name, fallback_mp) in &self.fallback_providers {
             let mut backoff_ms = self.base_backoff_ms;
 
@@ -767,6 +787,26 @@ impl ModelProvider for ReliableModelProvider {
         }
 
         // Try fallback providers (primary + model fallbacks exhausted).
+        if self.fallback_providers.is_empty() {
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                "Primary exhausted, no fallback providers configured"
+            );
+        } else {
+            let names: Vec<&str> = self
+                .fallback_providers
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect();
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                format!("Primary exhausted, trying fallback providers: {}", names.join(", "))
+            );
+        }
         for (fallback_name, fallback_mp) in &self.fallback_providers {
             let mut backoff_ms = self.base_backoff_ms;
 
@@ -967,6 +1007,26 @@ impl ModelProvider for ReliableModelProvider {
 
         // Try fallback providers (primary + model fallbacks exhausted).
         // Each fallback gets its own full retry cycle.
+        if self.fallback_providers.is_empty() {
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                "Primary exhausted, no fallback providers configured"
+            );
+        } else {
+            let names: Vec<&str> = self
+                .fallback_providers
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect();
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                format!("Primary exhausted, trying fallback providers: {}", names.join(", "))
+            );
+        }
         for (fallback_name, fallback_mp) in &self.fallback_providers {
             let mut backoff_ms = self.base_backoff_ms;
 
@@ -1147,6 +1207,26 @@ impl ModelProvider for ReliableModelProvider {
 
         // Try fallback providers (primary + model fallbacks exhausted).
         // Each fallback gets its own full retry cycle.
+        if self.fallback_providers.is_empty() {
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                "Primary exhausted, no fallback providers configured"
+            );
+        } else {
+            let names: Vec<&str> = self
+                .fallback_providers
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect();
+            ::zeroclaw_log::record!(
+                WARN,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
+                format!("Primary exhausted, trying fallback providers: {}", names.join(", "))
+            );
+        }
         for (fallback_name, fallback_mp) in &self.fallback_providers {
             let mut backoff_ms = self.base_backoff_ms;
 
