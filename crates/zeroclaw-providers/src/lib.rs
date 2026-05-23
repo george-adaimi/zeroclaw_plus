@@ -1484,14 +1484,23 @@ pub fn create_resilient_model_provider_with_fallbacks(
     )?;
 
     // Build fallback providers — also routed so they respect model_routes.
+    // Each fallback resolves its own API key from config (not the primary's key).
     let mut fallback_providers: Vec<(String, Box<dyn ModelProvider>)> = Vec::new();
     for fallback_name in fallback_names {
-        let fp = create_resilient_model_provider_from_ref(
+        // Resolve the fallback's own API key from its config entry.
+        let fallback_key = fallback_name.split_once('.')
+            .and_then(|(family, alias)| {
+                config.providers.models.find(family, alias)
+                    .and_then(|e| e.api_key.as_deref())
+            });
+        let fp = create_routed_model_provider_with_options(
             config,
             fallback_name,
-            api_key,
-            None, // api_url is only for the primary
+            fallback_key,
+            None,
             reliability,
+            &config.model_routes,
+            default_model,
             options,
         )?;
         fallback_providers.push((fallback_name.clone(), fp));
