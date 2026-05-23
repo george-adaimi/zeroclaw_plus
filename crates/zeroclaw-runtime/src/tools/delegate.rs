@@ -750,25 +750,75 @@ impl DelegateTool {
             });
         }
 
-        // Create model_provider for this agent, threading the per-alias URI
-        let model_provider: Box<dyn ModelProvider> =
-            match zeroclaw_providers::create_model_provider_with_options_and_url(
-                &provider_type,
-                credential.as_deref(),
-                uri.as_deref(),
-                &self.provider_runtime_options,
-            ) {
-                Ok(p) => p,
-                Err(e) => {
-                    return Ok(ToolResult {
-                        success: false,
-                        output: String::new(),
-                        error: Some(format!(
-                            "Failed to create model_provider '{provider_type}' for agent '{agent_name}': {e}"
-                        )),
-                    });
+        // Create model_provider for this agent, with fallback support.
+        // Use the full dotted model_provider ref (e.g. "openrouter.researcher")
+        // so the resilient factory can resolve typed alias config and fallbacks.
+        let model_provider_ref = agent_config.model_provider.to_string();
+        let fallback_names: Vec<String> = agent_config
+            .model_provider_fallback
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let reliability = self.root_config
+            .as_ref()
+            .map(|c| &c.reliability);
+
+        let model_provider_result: Result<Box<dyn ModelProvider>, String> = (|| -> Result<_, String> {
+            if fallback_names.is_empty() {
+                match reliability {
+                    Some(rel) => zeroclaw_providers::create_resilient_model_provider_from_ref(
+                        self.root_config.as_ref().unwrap(),
+                        &model_provider_ref,
+                        credential.as_deref(),
+                        uri.as_deref(),
+                        rel,
+                        &self.provider_runtime_options,
+                    )
+                    .map_err(|e| e.to_string()),
+                    None => zeroclaw_providers::create_model_provider_with_options_and_url(
+                        &provider_type,
+                        credential.as_deref(),
+                        uri.as_deref(),
+                        &self.provider_runtime_options,
+                    )
+                    .map_err(|e| e.to_string()),
                 }
-            };
+            } else {
+                match reliability {
+                    Some(rel) => zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
+                        self.root_config.as_ref().unwrap(),
+                        &model_provider_ref,
+                        credential.as_deref(),
+                        uri.as_deref(),
+                        rel,
+                        &fallback_names,
+                        &model,
+                        &self.provider_runtime_options,
+                    )
+                    .map_err(|e| e.to_string()),
+                    None => zeroclaw_providers::create_model_provider_with_options_and_url(
+                        &provider_type,
+                        credential.as_deref(),
+                        uri.as_deref(),
+                        &self.provider_runtime_options,
+                    )
+                    .map_err(|e| e.to_string()),
+                }
+            }
+        })();
+
+        let model_provider: Box<dyn ModelProvider> = match model_provider_result {
+            Ok(p) => p,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: String::new(),
+                    error: Some(format!(
+                        "Failed to create model_provider '{provider_type}' for agent '{agent_name}': {e}"
+                    )),
+                });
+            }
+        };
 
         // Build the message
         let full_prompt = if context.is_empty() {
