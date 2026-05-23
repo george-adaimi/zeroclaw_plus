@@ -1485,7 +1485,7 @@ pub fn create_resilient_model_provider_with_fallbacks(
 
     // Build fallback providers — also routed so they respect model_routes.
     // Each fallback resolves its own API key and model from its config entry.
-    let mut fallback_providers: Vec<(String, Box<dyn ModelProvider>)> = Vec::new();
+    let mut fallback_providers: Vec<(String, String, Box<dyn ModelProvider>)> = Vec::new();
     for fallback_name in fallback_names {
         // Resolve the fallback's own API key, model, and URI from its config entry.
         let (fallback_key, fallback_model, fallback_uri) = fallback_name.split_once('.')
@@ -1519,13 +1519,13 @@ pub fn create_resilient_model_provider_with_fallbacks(
             model_to_use,
             &fallback_options,
         )?;
-        fallback_providers.push((fallback_name.clone(), fp));
+        fallback_providers.push((fallback_name.clone(), model_to_use.to_string(), fp));
     }
 
     ::zeroclaw_log::record!(
         DEBUG,
         ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
-            .with_attrs(::serde_json::json!({"primary": primary_name, "fallback_count": fallback_providers.len(), "fallbacks": fallback_providers.iter().map(|(n, _)| n).collect::<Vec<_>>() })),
+            .with_attrs(::serde_json::json!({"primary": primary_name, "fallback_count": fallback_providers.len(), "fallbacks": fallback_providers.iter().map(|(n, _, _)| n).collect::<Vec<_>>() })),
             &format!("create_resilient_model_provider_with_fallbacks: primary={}, fallback_count={}", primary_name, fallback_providers.len())
     );
 
