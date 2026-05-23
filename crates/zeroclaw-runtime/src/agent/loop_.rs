@@ -4384,45 +4384,37 @@ pub async fn process_message(
         };
         let provider_runtime_options =
             zeroclaw_providers::provider_runtime_options_from_config(&config);
-        let model_provider: Box<dyn ModelProvider> = {
-            ::zeroclaw_log::record!(
-                DEBUG,
-                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
-                    .with_attrs(::serde_json::json!({"alias": agent_alias, "fallback_count": agent.model_provider_fallback.len(), "fallbacks": agent.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
-                    &format!("process_message: model_provider={}, fallback_count={}", provider_name, agent.model_provider_fallback.len())
-            );
-            if agent.model_provider_fallback.is_empty() {
-                zeroclaw_providers::create_routed_model_provider_with_options(
-                    &config,
-                    provider_name,
-                    agent_model_provider
-                        .as_ref()
-                        .and_then(|e| e.api_key.as_deref()),
-                    agent_model_provider.as_ref().and_then(|e| e.uri.as_deref()),
-                    &config.reliability,
-                    &config.model_routes,
-                    &model_name,
-                    &provider_runtime_options,
-                )?
-            } else {
-                let fallback_names: Vec<String> = agent
-                    .model_provider_fallback
-                    .iter()
-                    .map(|r| r.to_string())
-                    .collect();
-                zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
-                    &config,
-                    provider_name,
-                    agent_model_provider
-                        .as_ref()
-                        .and_then(|e| e.api_key.as_deref()),
-                    agent_model_provider.as_ref().and_then(|e| e.uri.as_deref()),
-                    &config.reliability,
-                    &fallback_names,
-                    &model_name,
-                    &provider_runtime_options,
-                )?
-            }
+        let model_provider: Box<dyn ModelProvider> = if agent.model_provider_fallback.is_empty() {
+            zeroclaw_providers::create_routed_model_provider_with_options(
+                &config,
+                provider_name,
+                agent_model_provider
+                    .as_ref()
+                    .and_then(|e| e.api_key.as_deref()),
+                agent_model_provider.as_ref().and_then(|e| e.uri.as_deref()),
+                &config.reliability,
+                &config.model_routes,
+                &model_name,
+                &provider_runtime_options,
+            )?
+        } else {
+            let fallback_names: Vec<String> = agent
+                .model_provider_fallback
+                .iter()
+                .map(|r| r.to_string())
+                .collect();
+            zeroclaw_providers::create_resilient_model_provider_with_fallbacks(
+                &config,
+                provider_name,
+                agent_model_provider
+                    .as_ref()
+                    .and_then(|e| e.api_key.as_deref()),
+                agent_model_provider.as_ref().and_then(|e| e.uri.as_deref()),
+                &config.reliability,
+                &fallback_names,
+                &model_name,
+                &provider_runtime_options,
+            )?
         };
 
         let hardware_rag: Option<crate::rag::HardwareRag> = config

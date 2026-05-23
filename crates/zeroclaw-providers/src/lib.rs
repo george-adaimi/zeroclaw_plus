@@ -1497,6 +1497,13 @@ pub fn create_resilient_model_provider_with_fallbacks(
         fallback_providers.push((fallback_name.clone(), fp));
     }
 
+    ::zeroclaw_log::record!(
+        DEBUG,
+        ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+            .with_attrs(::serde_json::json!({"primary": primary_name, "fallback_count": fallback_providers.len(), "fallbacks": fallback_providers.iter().map(|(n, _)| n).collect::<Vec<_>>() })),
+            &format!("create_resilient_model_provider_with_fallbacks: primary={}, fallback_count={}", primary_name, fallback_providers.len())
+    );
+
     let reliable = ReliableModelProvider::new(
         primary_name,
         vec![(primary_name.to_string(), primary)],
