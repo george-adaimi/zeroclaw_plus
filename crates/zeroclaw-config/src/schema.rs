@@ -13390,8 +13390,7 @@ impl Config {
                 .await
                 .context("Failed to read config file")?;
 
-            eprintln!("[DEBUG] Loading config from {}", config_path.display());
-            ::zeroclaw_log::record!(
+           ::zeroclaw_log::record!(
                 INFO,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
                     .with_attrs(::serde_json::json!({"config_path": config_path.to_string_lossy().to_string(), "content_length": contents.len()})),
@@ -13427,18 +13426,7 @@ impl Config {
             let mut config: Config = crate::migration::migrate_to_current(&contents)
                 .context("Failed to migrate config")?;
 
-            // Debug: dump all agent aliases and their model_provider_fallback
-            for (alias, agent) in &config.agents {
-                eprintln!("[DEBUG] Loaded agent '{}': model_provider={}, model_provider_fallback={}",
-                    alias, agent.model_provider, agent.model_provider_fallback.len());
-                ::zeroclaw_log::record!(
-                    INFO,
-                    ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
-                        .with_attrs(::serde_json::json!({"alias": alias, "model_provider": agent.model_provider.to_string(), "model_provider_fallback_count": agent.model_provider_fallback.len(), "fallbacks": agent.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
-                    &format!("Loaded agent '{}': model_provider={}, model_provider_fallback={}", alias, agent.model_provider, agent.model_provider_fallback.len())
-                );
-            }
-            if let Some(from_version) = stale_version {
+              if let Some(from_version) = stale_version {
                 ::zeroclaw_log::record!(
                     WARN,
                     ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)

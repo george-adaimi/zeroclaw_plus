@@ -598,7 +598,7 @@ impl ModelProvider for ReliableModelProvider {
                 WARN,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
                     .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
-                "Primary exhausted, no fallback providers configured"
+                "Primary exhausted, no fallback providers configured 1"
             );
         } else {
             let names: Vec<&str> = self
@@ -792,7 +792,7 @@ impl ModelProvider for ReliableModelProvider {
                 WARN,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
                     .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
-                "Primary exhausted, no fallback providers configured"
+                "Primary exhausted, no fallback providers configured 2"
             );
         } else {
             let names: Vec<&str> = self
@@ -1012,7 +1012,7 @@ impl ModelProvider for ReliableModelProvider {
                 WARN,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
                     .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
-                "Primary exhausted, no fallback providers configured"
+                "Primary exhausted, no fallback providers configured 3"
             );
         } else {
             let names: Vec<&str> = self
@@ -1212,7 +1212,7 @@ impl ModelProvider for ReliableModelProvider {
                 WARN,
                 ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
                     .with_outcome(::zeroclaw_log::EventOutcome::Unknown),
-                "Primary exhausted, no fallback providers configured"
+                "Primary exhausted, no fallback providers configured 4"
             );
         } else {
             let names: Vec<&str> = self

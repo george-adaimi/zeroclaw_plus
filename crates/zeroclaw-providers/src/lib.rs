@@ -1468,32 +1468,30 @@ pub fn create_resilient_model_provider_with_fallbacks(
     api_url: Option<&str>,
     reliability: &zeroclaw_config::schema::ReliabilityConfig,
     fallback_names: &[String],
-    _default_model: &str,
+    default_model: &str,
     options: &ModelProviderRuntimeOptions,
 ) -> anyhow::Result<Box<dyn ModelProvider>> {
-    // Build the ReliableModelProvider with primary + fallback providers.
-    // Since create_resilient_model_provider_from_ref returns Box<dyn ModelProvider>,
-    // we reconstruct directly using create_model_provider_inner.
-    let primary_inner = create_model_provider_inner(
-        Some(config),
+    // Build the primary provider (with routing if model_routes is non-empty).
+    let primary = create_routed_model_provider_with_options(
+        config,
         primary_name,
-        "default",
         api_key,
         api_url,
+        reliability,
+        &config.model_routes,
+        default_model,
         options,
     )?;
 
-    let all_providers: Vec<(String, Box<dyn ModelProvider>)> =
-        vec![(primary_name.to_string(), primary_inner)];
-
+    // Build fallback providers — also routed so they respect model_routes.
     let mut fallback_providers: Vec<(String, Box<dyn ModelProvider>)> = Vec::new();
     for fallback_name in fallback_names {
-        let fp = create_model_provider_inner(
-            Some(config),
+        let fp = create_resilient_model_provider_from_ref(
+            config,
             fallback_name,
-            "default",
             api_key,
             None, // api_url is only for the primary
+            reliability,
             options,
         )?;
         fallback_providers.push((fallback_name.clone(), fp));
@@ -1501,7 +1499,7 @@ pub fn create_resilient_model_provider_with_fallbacks(
 
     let reliable = ReliableModelProvider::new(
         primary_name,
-        all_providers,
+        vec![(primary_name.to_string(), primary)],
         reliability.provider_retries,
         reliability.provider_backoff_ms,
     )
