@@ -13390,6 +13390,13 @@ impl Config {
                 .await
                 .context("Failed to read config file")?;
 
+            ::zeroclaw_log::record!(
+                INFO,
+                ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                    .with_attrs(::serde_json::json!({"config_path": config_path.to_string_lossy().to_string(), "content_length": contents.len()})),
+                    &format!("Loading config from {}", config_path.display())
+            );
+
             // Deserialize the config with the standard TOML parser.
             //
             // Previously this used `serde_ignored::deserialize` for both
@@ -13418,6 +13425,16 @@ impl Config {
                 .filter(|n| *n != crate::migration::CURRENT_SCHEMA_VERSION);
             let mut config: Config = crate::migration::migrate_to_current(&contents)
                 .context("Failed to migrate config")?;
+
+            // Debug: dump all agent aliases and their model_provider_fallback
+            for (alias, agent) in &config.agents {
+                ::zeroclaw_log::record!(
+                    INFO,
+                    ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                        .with_attrs(::serde_json::json!({"alias": alias, "model_provider": agent.model_provider.to_string(), "model_provider_fallback_count": agent.model_provider_fallback.len(), "fallbacks": agent.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
+                    &format!("Loaded agent '{}': model_provider={}, model_provider_fallback={}", alias, agent.model_provider, agent.model_provider_fallback.len())
+                );
+            }
             if let Some(from_version) = stale_version {
                 ::zeroclaw_log::record!(
                     WARN,
