@@ -624,7 +624,7 @@ impl ModelProvider for ReliableModelProvider {
                     .await
                 {
                     Ok(resp) => {
-                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), "Fallback model_provider recovered");
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), format!("Fallback {} recovered", fallback_name));
                         let primary = self
                             .model_providers
                             .first()
@@ -818,7 +818,7 @@ impl ModelProvider for ReliableModelProvider {
                     .await
                 {
                     Ok(resp) => {
-                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), "Fallback model_provider recovered");
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), format!("Fallback {} recovered", fallback_name));
                         let primary = self
                             .model_providers
                             .first()
@@ -1038,7 +1038,7 @@ impl ModelProvider for ReliableModelProvider {
                     .await
                 {
                     Ok(resp) => {
-                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), "Fallback model_provider recovered");
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), format!("Fallback {} recovered", fallback_name));
                         let primary = self
                             .model_providers
                             .first()
@@ -1239,7 +1239,7 @@ impl ModelProvider for ReliableModelProvider {
                 };
                 match fallback_mp.chat(req, fallback_model.as_str(), temperature).await {
                     Ok(resp) => {
-                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), "Fallback model_provider recovered");
+                        ::zeroclaw_log::record!(INFO, ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note).with_attrs(::serde_json::json!({"model_provider": fallback_name, "model": fallback_model, "attempt": attempt})), format!("Fallback {} recovered", fallback_name));
                         let primary = self
                             .model_providers
                             .first()
