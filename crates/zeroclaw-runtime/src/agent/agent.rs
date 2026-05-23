@@ -636,6 +636,13 @@ impl Agent {
         let agent_cfg = config
             .agent(agent_alias)
             .with_context(|| format!("agents.{agent_alias} is not configured"))?;
+
+        ::zeroclaw_log::record!(
+            INFO,
+            ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note)
+                .with_attrs(::serde_json::json!({"alias": agent_alias, "model_provider": agent_cfg.model_provider.to_string(), "model_provider_fallback": agent_cfg.model_provider_fallback.iter().map(|r| r.to_string()).collect::<Vec<_>>() })),
+            &format!("AliasedAgentConfig for '{}': model_provider={}, fallback={}", agent_alias, agent_cfg.model_provider, agent_cfg.model_provider_fallback.len())
+        );
         let risk_profile = config
             .risk_profile_for_agent(agent_alias)
             .with_context(|| {
@@ -860,7 +867,7 @@ impl Agent {
                 &provider_runtime_options,
             )?;
 
-            if agent_cfg.model_provider_fallback.is_empty() {
+           if agent_cfg.model_provider_fallback.is_empty() {
                 primary
             } else {
                 let fallback_names: Vec<String> = agent_cfg
