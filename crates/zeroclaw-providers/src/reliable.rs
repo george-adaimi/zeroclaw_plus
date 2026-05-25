@@ -1105,6 +1105,7 @@ impl ModelProvider for ReliableModelProvider {
                     let req = ChatRequest {
                         messages: &effective_messages,
                         tools: request.tools,
+                        thinking: request.thinking,
                     };
                     match model_provider.chat(req, current_model, temperature).await {
                         Ok(resp) => {
@@ -1337,6 +1338,7 @@ impl ModelProvider for ReliableModelProvider {
             let req = ChatRequest {
                 messages: request.messages,
                 tools: request.tools,
+                thinking: request.thinking,
             };
             let stream = model_provider.stream_chat(req, &current_model, temperature, options);
             let (tx, rx) = tokio::sync::mpsc::channel::<StreamResult<StreamEvent>>(100);
@@ -2433,6 +2435,7 @@ mod tests {
         let request = ChatRequest {
             messages: &messages,
             tools: None,
+            thinking: None,
         };
         let result = model_provider
             .chat(request, "test-model", Some(0.0))
@@ -2474,6 +2477,7 @@ mod tests {
         let request = ChatRequest {
             messages: &messages,
             tools: None,
+            thinking: None,
         };
         let result = model_provider
             .chat(request, "test-model", Some(0.0))
@@ -2550,6 +2554,7 @@ mod tests {
         let request = ChatRequest {
             messages: &messages,
             tools: None,
+            thinking: None,
         };
         let err = model_provider
             .chat(request, "test", Some(0.0))
@@ -2653,6 +2658,7 @@ mod tests {
         let request = ChatRequest {
             messages: &messages,
             tools: None,
+            thinking: None,
         };
         let result = model_provider
             .chat(request, "claude-opus", Some(0.0))
@@ -2705,6 +2711,7 @@ mod tests {
         let request = ChatRequest {
             messages: &messages,
             tools: None,
+            thinking: None,
         };
         let result = model_provider
             .chat(request, "test", Some(0.0))
@@ -3057,6 +3064,7 @@ mod tests {
             ChatRequest {
                 messages: &messages,
                 tools: Some(&tools),
+                thinking: None,
             },
             "model",
             Some(0.0),
@@ -3099,6 +3107,7 @@ mod tests {
             ChatRequest {
                 messages: &messages,
                 tools: Some(&tools),
+                thinking: None,
             },
             "model",
             Some(0.0),
